@@ -1,0 +1,58 @@
+services:
+  rabbitmq:
+    image: rabbitmq:management-alpine
+    container_name: fakedjango-rabbitmq2
+    expose:
+      - 5672
+    # ports:
+    #   - 5672:5672
+    environment:
+      - RABBITMQ_DEFAULT_USER=pz_user
+      - RABBITMQ_DEFAULT_PASS=pz_pass
+      - RABBITMQ_DEFAULT_VHOST=cengine
+
+
+
+  cengine:
+    container_name: fakeCEngine3
+    command: sh -c "python3 manage.py migrate && gunicorn --config gunicorn_config.py djangocelery.wsgi:application"
+    # command: py manage.py migrate && py manage.py runserver
+    build: .
+    expose:
+      - 8000
+    env_file:
+      - .env
+
+  cengine_celery:
+    build: .
+    container_name: fakeCEngine-celery2
+    command: celery -A djangocelery worker --loglevel=WARNING
+    env_file:
+      - .env
+    depends_on:
+      - cengine
+      - rabbitmq
+  
+  beat:
+    container_name: my-beat-container2
+    command: celery -A djangocelery beat
+    build: .
+    volumes:
+      - .:/app
+    depends_on:
+      - rabbitmq
+      - cengine_celery
+
+  flower:
+    container_name: flower
+    build: .
+    command: celery -A djangocelery flower --port=5555
+    volumes:
+      - .:/app
+    ports:
+      - "5556:5555"
+    depends_on:
+      - rabbitmq
+      - cengine_celery
+volumes:
+  static_volume:
